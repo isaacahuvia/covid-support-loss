@@ -128,14 +128,14 @@ df %>%
   select(GAD_1:GAD_7) %>%
   psych::alpha() %>%
   .[["total"]] %>%
-  kable(digits = 2) %>%
+  kable(digits = 2, caption = "Internal consistency for GAD7") %>%
   kable_styling()
 
 df %>%
   select(PHQ_1:PHQ_9) %>%
   psych::alpha() %>%
   .[["total"]] %>%
-  kable(digits = 2) %>%
+  kable(digits = 2, caption = "Internal consistency for PHQ") %>%
   kable_styling()
 ```
 
