@@ -1,0 +1,248 @@
+---
+title: "COVID Support Loss Analytic Code"
+output:
+  html_document: default
+---
+
+```{r, include = F}
+####  Setup  ####
+library(easypackages)
+libraries("tidyverse", "ggplot2", "readr", "magrittr", "Amelia", "scales", "questionr", "corrplot", "knitr", "kableExtra", "conflicted", "fastDummies")
+walk(c("filter", "select", "count", "group_by"), ~ conflict_prefer(., "dplyr"))
+
+rm(list = ls())
+
+opts_chunk$set(echo = F, message = F)
+opts <- options(knitr.kable.NA = "")
+
+
+
+####  Load Data  ####
+raw <- read_rds("G:\\Shared drives\\Psychology_JSLab\\Projects\\In_Progress\\SBU_COVID19_Study\\Clean Data\\SBU COVID-19 Survey - Baseline.rds")
+
+
+
+####  Clean Data  ####
+clean <- raw %>%
+  
+  ## Filter TBD
+  filter(
+    
+    position == 1, #Just undergraduate students
+    supportLoss %in% 1:3 #Drop respondents who either didn't respond to support loss question, or don't usually receive support
+    
+    
+  ) %>%
+  
+  ## Recode and rename variables as necessary and select these variables for analysis
+  mutate(
+    
+    supportLoss = supportLoss %in% 1:2,
+    sex = case_when(sex == 1 ~ "Male",
+                    sex == 2 ~ "Female",
+                    T ~ NA_character_),
+    ethnicity = case_when(race == 1 & hispanic == 0 ~ "White non-Hispanic",
+                          race == 2 & hispanic == 0 ~ "Black non-Hispanic",
+                          race == 3 & hispanic == 0 ~ "AI/AN non-Hispanic",
+                          race == 4 & hispanic == 0 ~ "Asian non-Hispanic",
+                          race == 5 & hispanic == 0 ~ "NHOPI non-Hispanic",
+                          race == 6 & hispanic == 0 ~ "Multi non-Hispanic",
+                          hispanic == 1 ~ "Hispanic",
+                          T ~ NA_character_),
+    genderMinority = {gender == 3 | (genderDiff == 1 & .$sex != gender)} %>%
+      if_else(is.na(gender), F, .),
+    sexualMinority = if_else(!is.na(sexualOrientation), sexualOrientation %in% 2:9, NA),
+    GAD7 = GAD_1 + GAD_2 + GAD_3 + GAD_4 + GAD_5 + GAD_6 + GAD_7 - 7, #-7 to account for original coding being off by 1
+    PHQ = PHQ_1 + PHQ_2 + PHQ_3 + PHQ_4 + PHQ_5 + PHQ_6 + PHQ_7 + PHQ_8 + PHQ_9 - 9, #-9 to account for original coding being off by 1
+    SI = PHQ_9 > 1
+  
+  ) %>%
+  
+  select_at(vars(supportLoss, sex, ethnicity, genderMinority, sexualMinority, GAD7, PHQ, SI,
+                 matches("^GAD_[0-9]"),
+                 matches("^PHQ_[0-9]"),
+                 matches("^impact.")))
+
+before <- nrow(clean)
+
+df <- clean[complete.cases(clean),]
+
+after <- nrow(df)
+```
+
+# Study Overview
+
+This study investigates loss of mental, behavioral, and/or emotional support in the midst of the COVID-19 pandemic among undergraduate students at a large university. The goal of this study is to gather evidence on the extent of this loss and whether it differs by individual characteristics. Specifically, we seek to answer the following questions:
+
+1. What is the extent of loss of support during the COVID-19 pandemic among members of a large university community?
+2. Does loss of support differ by (a) sociodemographic factors or (b) levels of depression and anxiety symptomatology, including suicidal ideation?
+
+This is an exploratory study and we do not have specific hypotheses regarding the extent of support loss, or whether/how it differs across the above conditions.
+
+Analyses are limited to complete cases only. This drops `r before - after` of `r before` cases.
+
+# Sample Description
+
+```{r}
+df.dummy <- df  %>%
+  select_at(vars(-matches("^GAD_[1-9]"),
+                 -matches("^PHQ_[1-9]"))) %>%
+  dummy_cols(remove_selected_columns = T)
+
+df.dummy%>%
+  pivot_longer(everything(), names_to = "Variable") %>%
+  mutate(Variable = factor(Variable, levels = names(df.dummy))) %>%
+  group_by(Variable) %>%
+  summarize(mean = mean(value)) %>%
+  mutate(`Mean/Frequency` = case_when(Variable %in% c("GAD7", "PHQ") ~ as.character(round(mean, 1)),
+                                      T ~ percent(mean, accuracy = .1))) %>%
+  select(Variable, `Mean/Frequency`) %>%
+  kable() %>%
+  kable_styling()
+```
+
+# Support loss by COVID impacts
+
+```{r}
+df %>%
+  select_at(vars(supportLoss, matches("^impact."))) %>%
+  pivot_longer(matches("^impact."), names_to = "impactType", values_to = "impactPresence") %>%
+  group_by(impactType, impactPresence) %>%
+  summarize(supportLoss = mean(supportLoss)) %>%
+  pivot_wider(id_cols = impactType, names_from = impactPresence, values_from = supportLoss) %>%
+  mutate(impactType = gsub("impact.", "", impactType),
+         `FALSE` = percent(`FALSE`, accuracy = .1),
+         `TRUE` = percent(`TRUE`, accuracy = .1)) %>%
+  rename(`Impact Type` = impactType,
+         `Impact Present` = `TRUE`,
+         `Impact Absent` = `FALSE`) %>%
+  kable() %>%
+  kable_styling() %>%
+  add_header_above(c(" ", "Lost Support" = 2))
+```
+
+# Internal consistency
+
+```{r}
+df %>%
+  select(GAD_1:GAD_7) %>%
+  psych::alpha() %>%
+  .[["total"]] %>%
+  kable(digits = 2) %>%
+  kable_styling()
+
+df %>%
+  select(PHQ_1:PHQ_9) %>%
+  psych::alpha() %>%
+  .[["total"]] %>%
+  kable(digits = 2) %>%
+  kable_styling()
+```
+
+# Main analysis
+
+```{r}
+printLoss <- function(x) {
+  
+  pct = percent(mean(x), accuracy = .1)
+  n = length(x)
+  
+  out = paste0(pct, " (n=", n, ")")
+  
+  return(out)
+  
+}
+
+out <- tibble_row(
+  
+  group = "Full sample",
+  lostSupport = printLoss(df$supportLoss),
+  statistic = NA_character_,
+  p = NA_real_
+  
+)
+
+vars = c("sex", "ethnicity", "genderMinority", "sexualMinority", "GAD7", "PHQ", "SI")
+
+for(var in vars) {
+  
+  class = class(df[[var]])
+  
+  if(class %in% c("character", "logical")) {
+    
+    table <- table(df$supportLoss, df[[var]])
+    test <- chisq.test(table)
+    
+    statistic <- paste0(names(test$statistic),
+                        "(df=", test$parameter[[1]], ") = ", 
+                        round(test$statistic[[1]], 3))
+    p <- test$p.value[[1]]
+    
+    out <- rbind(out, tibble(
+      group = var,
+      lostSupport = NA_character_,
+      statistic = statistic,
+      p = p
+      
+    ))
+    
+    for(level in unique(df[[var]])) {
+      
+      out <- rbind(out, tibble(
+        group = level,
+        lostSupport = printLoss(df$supportLoss[df[var] == level]),
+        statistic = NA_character_,
+        p = NA_real_
+        
+      ))
+      
+    }
+    
+  } else {
+    
+    x <- df[[var]][df$supportLoss == 1]
+    y <- df[[var]][df$supportLoss == 0]
+    
+    test <- t.test(x, y,
+                   alternative = "two.sided",
+                   paired = F,
+                   var.equal = F)
+    
+    statistic <- paste0(names(test$statistic), 
+                        "(df=", round(test$parameter[[1]], 1), ") = ",
+                        round(test$statistic[[1]], 3))
+    p = test$p.value
+    
+        out <- rbind(out, tibble(
+      group = var,
+      lostSupport = NA_character_,
+      statistic = statistic,
+      p = p
+      
+    ))
+    
+  }
+
+}
+
+out$p[!is.na(out$p)] <- p.adjust(out$p[!is.na(out$p)], "holm") 
+out$p[!is.na(out$p)] <- paste0("p = ", round(out$p[!is.na(out$p)], 3))
+
+out %>%
+  kable() %>%
+  kable_styling()
+```
+
+A quick table to aid in the interpretation of above t-tests
+
+```{r}
+df %>%
+  group_by(supportLoss) %>%
+  summarize(n = n(),
+            GAD7 = paste0(round(mean(GAD7), 2), " (",
+                          round(sd(GAD7), 2), ")"),
+            PHQ = paste0(round(mean(PHQ), 2), " (",
+                         round(sd(PHQ), 2), ")"))%>%
+  kable(digits = 2) %>%
+  kable_styling()
+```
