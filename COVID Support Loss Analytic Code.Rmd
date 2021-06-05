@@ -173,6 +173,9 @@ for(var in vars) {
     table <- table(df$supportLoss, df[[var]])
     test <- chisq.test(table)
     
+    print(paste0("Expected values for the Chi-square test of supportLoss, ", var))
+    print(test$expected)
+    
     statistic <- paste0(names(test$statistic),
                         "(df=", test$parameter[[1]], ") = ", 
                         round(test$statistic[[1]], 3))
