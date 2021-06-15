@@ -45,7 +45,7 @@ clean <- raw %>%
                           race == 2 & hispanic == 0 ~ "Black non-Hispanic",
                           race == 3 & hispanic == 0 ~ "AI/AN non-Hispanic",
                           race == 4 & hispanic == 0 ~ "Asian non-Hispanic",
-                          race == 5 & hispanic == 0 ~ "NHOPI non-Hispanic",
+                          race == 5 & hispanic == 0 ~ "NH/PI non-Hispanic",
                           race == 6 & hispanic == 0 ~ "Multi non-Hispanic",
                           hispanic == 1 ~ "Hispanic",
                           T ~ NA_character_),
@@ -54,7 +54,7 @@ clean <- raw %>%
     sexualMinority = if_else(!is.na(sexualOrientation), sexualOrientation %in% 2:9, NA),
     GAD7 = GAD_1 + GAD_2 + GAD_3 + GAD_4 + GAD_5 + GAD_6 + GAD_7 - 7, #-7 to account for original coding being off by 1
     PHQ = PHQ_1 + PHQ_2 + PHQ_3 + PHQ_4 + PHQ_5 + PHQ_6 + PHQ_7 + PHQ_8 + PHQ_9 - 9, #-9 to account for original coding being off by 1
-    SI = PHQ_9 > 1
+    SI = PHQ_9 > 1 #Any response greater than "Not at all," which is coded as a 1, not a 0, in the raw data
   
   ) %>%
   
@@ -108,11 +108,12 @@ df %>%
   select_at(vars(supportLoss, matches("^impact."))) %>%
   pivot_longer(matches("^impact."), names_to = "impactType", values_to = "impactPresence") %>%
   group_by(impactType, impactPresence) %>%
-  summarize(supportLoss = mean(supportLoss)) %>%
+  summarize(supportLoss.m = mean(supportLoss),
+            supportLoss.n = sum(supportLoss),
+            n = n(),
+            supportLoss = paste0(percent(supportLoss.m, .1), " (", supportLoss.n, " of ", n, ")")) %>%
   pivot_wider(id_cols = impactType, names_from = impactPresence, values_from = supportLoss) %>%
-  mutate(impactType = gsub("impact.", "", impactType),
-         `FALSE` = percent(`FALSE`, accuracy = .1),
-         `TRUE` = percent(`TRUE`, accuracy = .1)) %>%
+  mutate(impactType = gsub("impact.", "", impactType)) %>%
   rename(`Impact Type` = impactType,
          `Impact Present` = `TRUE`,
          `Impact Absent` = `FALSE`) %>%
@@ -228,7 +229,7 @@ for(var in vars) {
 
 }
 
-out$p[!is.na(out$p)] <- p.adjust(out$p[!is.na(out$p)], "holm") 
+out$p[!is.na(out$p)] <- p.adjust(out$p[!is.na(out$p)], "BH") 
 out$p[!is.na(out$p)] <- paste0("p = ", round(out$p[!is.na(out$p)], 3))
 
 out %>%
