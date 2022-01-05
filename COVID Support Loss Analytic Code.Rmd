@@ -83,22 +83,29 @@ Analyses are limited to complete cases only. This drops `r before - after` of `r
 
 # Sample Description
 
-```{r}
-df.dummy <- df  %>%
-  select_at(vars(-matches("^GAD_[1-9]"),
-                 -matches("^PHQ_[1-9]"))) %>%
-  dummy_cols(remove_selected_columns = T)
+Categorical variables (report n, percent)
 
-df.dummy%>%
-  pivot_longer(everything(), names_to = "Variable") %>%
-  mutate(Variable = factor(Variable, levels = names(df.dummy))) %>%
-  group_by(Variable) %>%
-  summarize(mean = mean(value)) %>%
-  mutate(`Mean/Frequency` = case_when(Variable %in% c("GAD7", "PHQ") ~ as.character(round(mean, 1)),
-                                      T ~ percent(mean, accuracy = .1))) %>%
-  select(Variable, `Mean/Frequency`) %>%
-  kable() %>%
-  kable_styling()
+```{r}
+df %>%
+  select(-matches("GAD"),
+         -matches("PHQ"),
+         -matches("impact")) %>%
+  mutate_all(as.character) %>%
+  pivot_longer(everything()) %>%
+  count(name, value) %>%
+  group_by(name) %>%
+  mutate(pct = percent(n / sum(n), accuracy = .01))
+```
+
+Continuous variables (report mean, sd)
+
+```{r}
+df %>%
+  select(GAD7, PHQ) %>%
+  pivot_longer(everything()) %>%
+  group_by(name) %>%
+  summarize(mean = mean(value),
+            sd = sd(value))
 ```
 
 # Support loss by COVID impacts
@@ -107,19 +114,16 @@ df.dummy%>%
 df %>%
   select_at(vars(supportLoss, matches("^impact."))) %>%
   pivot_longer(matches("^impact."), names_to = "impactType", values_to = "impactPresence") %>%
-  group_by(impactType, impactPresence) %>%
-  summarize(supportLoss.m = mean(supportLoss),
-            supportLoss.n = sum(supportLoss),
+  group_by(supportLoss, impactType) %>%
+  summarize(impactPresence.m = mean(impactPresence),
+            impactPresence.n = sum(impactPresence),
             n = n(),
-            supportLoss = paste0(percent(supportLoss.m, .1), " (", supportLoss.n, " of ", n, ")")) %>%
-  pivot_wider(id_cols = impactType, names_from = impactPresence, values_from = supportLoss) %>%
+            impactPresence = paste0(percent(impactPresence.m, .1), " (", impactPresence.n, " of ", n, ")")) %>%
+  pivot_wider(id_cols = impactType, names_from = supportLoss, values_from = impactPresence) %>%
   mutate(impactType = gsub("impact.", "", impactType)) %>%
-  rename(`Impact Type` = impactType,
-         `Impact Present` = `TRUE`,
-         `Impact Absent` = `FALSE`) %>%
-  kable() %>%
-  kable_styling() %>%
-  add_header_above(c(" ", "Lost Support" = 2))
+  select(`Impact Type` = impactType,
+         `Support Loss` = `TRUE`,
+         `No Loss` = `FALSE`)
 ```
 
 # Internal consistency
@@ -246,7 +250,31 @@ df %>%
             GAD7 = paste0(round(mean(GAD7), 2), " (",
                           round(sd(GAD7), 2), ")"),
             PHQ = paste0(round(mean(PHQ), 2), " (",
-                         round(sd(PHQ), 2), ")"))%>%
+                         round(sd(PHQ), 2), ")")) %>%
   kable(digits = 2) %>%
   kable_styling()
+```
+
+And a plot to this effect
+
+```{r}
+df %>%
+  select(`Support Loss` = supportLoss,
+         `GAD-7` = GAD7, 
+         `PHQ-9` = PHQ, 
+         SI) %>%
+  pivot_longer(c(`GAD-7`, `PHQ-9`, SI)) %>%
+  group_by(`Support Loss`, name) %>%
+  summarize(n = n(),
+            Mean = mean(value),
+            se = sd(value) / sqrt(n),
+            .groups = "drop") %>%
+  ggplot() +
+    geom_point(aes(`Support Loss`, Mean)) +
+    geom_errorbar(aes(x = `Support Loss`, ymin = Mean - se, ymax = Mean + se)) +
+    facet_wrap(~ name, scales = "free_y") +
+    scale_y_continuous(name = NULL, limits = c(0, NA)) +
+    theme_classic() +
+    ggtitle("Mental Health Symptoms by Support Loss", 
+            subtitle = "Means and Standard Errors")
 ```
