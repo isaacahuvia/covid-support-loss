@@ -105,7 +105,10 @@ df %>%
   pivot_longer(everything()) %>%
   group_by(name) %>%
   summarize(mean = mean(value),
-            sd = sd(value))
+            sd = sd(value),
+            `>= 10` = mean(value >= 10),
+            `>= 15` = mean(value >= 15),
+            `>= 20` = mean(value >= 20))
 ```
 
 # Support loss by COVID impacts

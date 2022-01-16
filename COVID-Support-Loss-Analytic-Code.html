@@ -203,11 +203,11 @@ pre code {
 ## 14 supportLoss    FALSE                157 37.83%
 ## 15 supportLoss    TRUE                 258 62.17%</code></pre>
 <p>Continuous variables (report mean, sd)</p>
-<pre><code>## # A tibble: 2 x 3
-##   name   mean    sd
-##   &lt;chr&gt; &lt;dbl&gt; &lt;dbl&gt;
-## 1 GAD7   10.3  5.98
-## 2 PHQ    12.1  6.70</code></pre>
+<pre><code>## # A tibble: 2 x 6
+##   name   mean    sd `&gt;= 10` `&gt;= 15` `&gt;= 20`
+##   &lt;chr&gt; &lt;dbl&gt; &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;
+## 1 GAD7   10.3  5.98   0.520   0.282  0.0699
+## 2 PHQ    12.1  6.70   0.607   0.337  0.173</code></pre>
 </div>
 <div id="support-loss-by-covid-impacts" class="section level1">
 <h1>Support loss by COVID impacts</h1>
