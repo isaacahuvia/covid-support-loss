@@ -117,11 +117,20 @@ df %>%
 df %>%
   select_at(vars(supportLoss, matches("^impact."))) %>%
   pivot_longer(matches("^impact."), names_to = "impactType", values_to = "impactPresence") %>%
+  group_by(impactType) %>%
+  summarize(impactPresence.m = mean(impactPresence),
+            impactPresence.n = sum(impactPresence),
+            n = n(),
+            impactPresence = paste0(percent(impactPresence.m, .01), " (", impactPresence.n, " of ", n, ")")) 
+
+df %>%
+  select_at(vars(supportLoss, matches("^impact."))) %>%
+  pivot_longer(matches("^impact."), names_to = "impactType", values_to = "impactPresence") %>%
   group_by(supportLoss, impactType) %>%
   summarize(impactPresence.m = mean(impactPresence),
             impactPresence.n = sum(impactPresence),
             n = n(),
-            impactPresence = paste0(percent(impactPresence.m, .1), " (", impactPresence.n, " of ", n, ")")) %>%
+            impactPresence = paste0(percent(impactPresence.m, .01), " (", impactPresence.n, " of ", n, ")")) %>%
   pivot_wider(id_cols = impactType, names_from = supportLoss, values_from = impactPresence) %>%
   mutate(impactType = gsub("impact.", "", impactType)) %>%
   select(`Impact Type` = impactType,
