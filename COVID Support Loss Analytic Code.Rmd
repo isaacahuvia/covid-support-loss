@@ -290,3 +290,17 @@ df %>%
     ggtitle("Mental Health Symptoms by Support Loss", 
             subtitle = "Means and Standard Errors")
 ```
+
+Another pair of tables on the SI - support loss relationship
+
+```{r}
+df %>%
+  group_by(SI) %>%
+  count(supportLoss) %>%
+  mutate(pct = percent(n / sum(n)))
+
+df %>%
+  group_by(supportLoss) %>%
+  count(SI) %>%
+  mutate(pct = percent(n / sum(n)))
+```
